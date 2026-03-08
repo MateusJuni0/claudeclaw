@@ -10,14 +10,18 @@ When invoked, follow these steps exactly:
 
 ## Step 1: Summarize the conversation
 
-Look at the last 5-10 back-and-forths in the current conversation. Write a tight TLDR summary that includes:
+Look at the last 5-10 back-and-forths in the current conversation. Write a TLDR that captures the **substance** of what was discussed, not just a log of actions taken.
 
-- **What was discussed** -- the main topics/questions
-- **What was decided** -- any decisions made, approaches chosen
-- **What was done** -- any concrete actions taken (files created, code written, commands run, etc.)
-- **Open threads** -- anything left unfinished or flagged for later
+The note should be useful to someone (including your future self) who wasn't in the conversation. They should be able to read it and understand the ideas, decisions, and reasoning -- not just "we did X, Y, Z."
 
-Keep it concise. Bullet points, not paragraphs. No fluff.
+Structure the summary into these sections:
+
+- **Key ideas and content** -- The actual substance. If you discussed a video structure, include the structure. If you brainstormed titles, include the top candidates and why. If you designed an architecture, describe it. This is the most important section -- preserve the thinking, not just the actions.
+- **Decisions made** -- What was decided and why. Include the reasoning, not just the conclusion.
+- **Actions taken** -- Files created, commands run, things built. Keep this part brief -- just a reference list.
+- **Open threads** -- Anything left unfinished or flagged for later.
+
+The key ideas section should be the longest. Be specific -- include names, numbers, structures, frameworks, exact titles, quotes, timestamps. If you spent 20 minutes working through a video script structure, the TLDR should contain that structure, not just "discussed video structure."
 
 ## Step 2: Ask where to store it
 
@@ -58,9 +62,21 @@ created: YYYY-MM-DD
 
 # [Title]
 
-## TLDR
+## Key Ideas
 
-[Bullet point summary from Step 1]
+[The substance of the conversation. Preserve the actual content -- structures, frameworks, titles, reasoning, specific details. This section should be long enough that someone reading it gets the real value without needing the full conversation.]
+
+## Decisions
+
+[What was decided and why. Brief but include reasoning.]
+
+## Actions Taken
+
+[Brief list of concrete things done -- files created, commands run, etc. Just references.]
+
+## Open Threads
+
+[Anything unfinished or flagged for later.]
 
 ## Context
 
