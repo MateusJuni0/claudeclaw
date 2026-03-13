@@ -24,14 +24,20 @@ sqlite3 store/claudeclaw.db "SELECT agent_id, action, summary, datetime(created_
 
 You can create scheduled tasks that run in YOUR agent process (not the main bot):
 
+**IMPORTANT:** Use `git rev-parse --show-toplevel` to resolve the project root. **Never use `find`** to locate files.
+
 ```bash
-node [PATH TO CLAUDECLAW]/dist/schedule-cli.js create "PROMPT" "CRON"
+PROJECT_ROOT=$(git rev-parse --show-toplevel)
+node "$PROJECT_ROOT/dist/schedule-cli.js" create "PROMPT" "CRON"
 ```
 
 The agent ID is auto-detected from your environment via `CLAUDECLAW_AGENT_ID`. Tasks you create will fire from your agent's scheduler, not the main bot.
 
-List tasks: `node [PATH TO CLAUDECLAW]/dist/schedule-cli.js list`
-Delete: `node [PATH TO CLAUDECLAW]/dist/schedule-cli.js delete <id>`
+```bash
+PROJECT_ROOT=$(git rev-parse --show-toplevel)
+node "$PROJECT_ROOT/dist/schedule-cli.js" list
+node "$PROJECT_ROOT/dist/schedule-cli.js" delete <id>
+```
 
 ## Rules
 - You have access to all global skills in ~/.claude/skills/

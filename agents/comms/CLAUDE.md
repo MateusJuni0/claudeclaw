@@ -23,14 +23,20 @@ sqlite3 store/claudeclaw.db "INSERT INTO hive_mind (agent_id, chat_id, action, s
 
 You can create scheduled tasks that run in YOUR agent process (not the main bot):
 
+**IMPORTANT:** Use `git rev-parse --show-toplevel` to resolve the project root. **Never use `find`** to locate files.
+
 ```bash
-node dist/schedule-cli.js create "PROMPT" "CRON"
+PROJECT_ROOT=$(git rev-parse --show-toplevel)
+node "$PROJECT_ROOT/dist/schedule-cli.js" create "PROMPT" "CRON"
 ```
 
 The agent ID is auto-detected from your environment. Tasks you create will fire from the comms agent.
 
-List tasks: `node dist/schedule-cli.js list`
-Delete: `node dist/schedule-cli.js delete <id>`
+```bash
+PROJECT_ROOT=$(git rev-parse --show-toplevel)
+node "$PROJECT_ROOT/dist/schedule-cli.js" list
+node "$PROJECT_ROOT/dist/schedule-cli.js" delete <id>
+```
 
 ## Style
 - Match the user's voice and tone when drafting messages.
