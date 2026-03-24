@@ -234,6 +234,18 @@ function createSchema(database: Database.Database): void {
     CREATE INDEX IF NOT EXISTS idx_mission_status
       ON mission_tasks(assigned_agent, status, priority DESC, created_at ASC);
 
+    CREATE TABLE IF NOT EXISTS audit_log (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      agent_id    TEXT NOT NULL DEFAULT 'main',
+      chat_id     TEXT NOT NULL DEFAULT '',
+      action      TEXT NOT NULL,
+      detail      TEXT NOT NULL DEFAULT '',
+      blocked     INTEGER NOT NULL DEFAULT 0,
+      created_at  INTEGER NOT NULL DEFAULT (strftime('%s','now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_audit_time ON audit_log(created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_audit_agent ON audit_log(agent_id, created_at DESC);
+
     CREATE VIRTUAL TABLE IF NOT EXISTS memories_fts USING fts5(
       summary,
       raw_text,
@@ -273,6 +285,15 @@ export function initDatabase(): void {
   db.pragma('journal_mode = WAL');
   createSchema(db);
   runMigrations(db);
+
+  // Restrict database file permissions (owner-only read/write)
+  try {
+    for (const suffix of ['', '-wal', '-shm']) {
+      const f = dbPath + suffix;
+      if (fs.existsSync(f)) fs.chmodSync(f, 0o600);
+    }
+    fs.chmodSync(STORE_DIR, 0o700);
+  } catch { /* non-fatal on platforms that don't support chmod */ }
 }
 
 /** Add columns that may not exist in older databases. */
@@ -1880,4 +1901,52 @@ export function resetStuckMissionTasks(agentId: string): number {
     `UPDATE mission_tasks SET status = 'queued', started_at = NULL WHERE status = 'running' AND assigned_agent = ?`,
   ).run(agentId);
   return result.changes;
+}
+
+// ── Audit Log ────────────────────────────────────────────────────────
+
+export function insertAuditLog(
+  agentId: string,
+  chatId: string,
+  action: string,
+  detail: string,
+  blocked: boolean,
+): void {
+  db.prepare(
+    `INSERT INTO audit_log (agent_id, chat_id, action, detail, blocked, created_at) VALUES (?, ?, ?, ?, ?, strftime('%s','now'))`,
+  ).run(agentId, chatId, action, detail.slice(0, 2000), blocked ? 1 : 0);
+}
+
+export interface AuditLogEntry {
+  id: number;
+  agent_id: string;
+  chat_id: string;
+  action: string;
+  detail: string;
+  blocked: number;
+  created_at: number;
+}
+
+export function getAuditLog(limit = 50, offset = 0, agentId?: string): AuditLogEntry[] {
+  if (agentId) {
+    return db.prepare(
+      `SELECT * FROM audit_log WHERE agent_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+    ).all(agentId, limit, offset) as AuditLogEntry[];
+  }
+  return db.prepare(
+    `SELECT * FROM audit_log ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+  ).all(limit, offset) as AuditLogEntry[];
+}
+
+export function getAuditLogCount(agentId?: string): number {
+  if (agentId) {
+    return (db.prepare('SELECT COUNT(*) as c FROM audit_log WHERE agent_id = ?').get(agentId) as { c: number }).c;
+  }
+  return (db.prepare('SELECT COUNT(*) as c FROM audit_log').get() as { c: number }).c;
+}
+
+export function getRecentBlockedActions(limit = 10): AuditLogEntry[] {
+  return db.prepare(
+    `SELECT * FROM audit_log WHERE blocked = 1 ORDER BY created_at DESC LIMIT ?`,
+  ).all(limit) as AuditLogEntry[];
 }

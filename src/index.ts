@@ -4,9 +4,10 @@ import path from 'path';
 import { loadAgentConfig, resolveAgentDir, resolveAgentClaudeMd } from './agent-config.js';
 import { createBot } from './bot.js';
 import { checkPendingMigrations } from './migrations.js';
-import { ALLOWED_CHAT_ID, activeBotToken, STORE_DIR, PROJECT_ROOT, CLAUDECLAW_CONFIG, GOOGLE_API_KEY, setAgentOverrides } from './config.js';
+import { ALLOWED_CHAT_ID, activeBotToken, STORE_DIR, PROJECT_ROOT, CLAUDECLAW_CONFIG, GOOGLE_API_KEY, setAgentOverrides, SECURITY_PIN_HASH, IDLE_LOCK_MINUTES, EMERGENCY_KILL_PHRASE } from './config.js';
 import { startDashboard } from './dashboard.js';
-import { initDatabase, cleanupOldMissionTasks } from './db.js';
+import { initDatabase, cleanupOldMissionTasks, insertAuditLog } from './db.js';
+import { initSecurity, setAuditCallback } from './security.js';
 import { logger } from './logger.js';
 import { cleanupOldUploads } from './media.js';
 import { runConsolidation } from './memory-consolidate.js';
@@ -94,7 +95,7 @@ function acquireLock(): void {
       }
     }
   } catch { /* ignore */ }
-  fs.writeFileSync(PID_FILE, String(process.pid));
+  fs.writeFileSync(PID_FILE, String(process.pid), { mode: 0o600 });
 }
 
 function releaseLock(): void {
@@ -122,6 +123,16 @@ async function main(): Promise<void> {
 
   initDatabase();
   logger.info('Database ready');
+
+  // Initialize security (PIN lock, kill phrase, destructive confirmation, audit)
+  initSecurity({
+    pinHash: SECURITY_PIN_HASH || undefined,
+    idleLockMinutes: IDLE_LOCK_MINUTES,
+    killPhrase: EMERGENCY_KILL_PHRASE || undefined,
+  });
+  setAuditCallback((entry) => {
+    insertAuditLog(entry.agentId, entry.chatId, entry.action, entry.detail, entry.blocked);
+  });
 
   initOrchestrator();
 

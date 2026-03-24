@@ -20,6 +20,9 @@ const envConfig = readEnvFile([
   'DB_ENCRYPTION_KEY',
   'GOOGLE_API_KEY',
   'AGENT_TIMEOUT_MS',
+  'SECURITY_PIN_HASH',
+  'IDLE_LOCK_MINUTES',
+  'EMERGENCY_KILL_PHRASE',
 ]);
 
 // ── Multi-agent support ──────────────────────────────────────────────
@@ -147,3 +150,19 @@ export const GOOGLE_API_KEY =
 export type StreamStrategy = 'global-throttle' | 'single-agent-only' | 'off';
 export const STREAM_STRATEGY: StreamStrategy =
   (process.env.STREAM_STRATEGY || 'off') as StreamStrategy;
+
+// ── Security ─────────────────────────────────────────────────────────
+// PIN lock: SHA-256 hash of your PIN. Generate: node -e "console.log(require('crypto').createHash('sha256').update('YOUR_PIN').digest('hex'))"
+export const SECURITY_PIN_HASH =
+  process.env.SECURITY_PIN_HASH || envConfig.SECURITY_PIN_HASH || '';
+
+// Auto-lock after N minutes of inactivity. 0 = disabled. Only active when PIN is set.
+export const IDLE_LOCK_MINUTES = parseInt(
+  process.env.IDLE_LOCK_MINUTES || envConfig.IDLE_LOCK_MINUTES || '0',
+  10,
+);
+
+// Emergency kill phrase. Sending this to any bot immediately stops all agents and exits.
+export const EMERGENCY_KILL_PHRASE =
+  process.env.EMERGENCY_KILL_PHRASE || envConfig.EMERGENCY_KILL_PHRASE || '';
+
