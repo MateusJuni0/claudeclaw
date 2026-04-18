@@ -1,6 +1,28 @@
 import fs from 'fs';
 import path from 'path';
 
+// Defense-in-depth: strip nested-session env markers inherited from PM2 parent
+// shells (e.g. PM2 spawned from inside a Claude Code Desktop session). These
+// vars cause the Agent SDK subprocess to abort with "cannot be launched inside
+// another Claude Code session" or to use stale OAuth tokens. agent.ts already
+// filters these per query, but removing them at process startup prevents any
+// leak into logs, diagnostics, or child processes that bypass the agent layer.
+const NESTED_SESSION_ENV_VARS = [
+  'CLAUDECODE',
+  'CLAUDE_CODE_ENTRYPOINT',
+  'CLAUDE_CODE_EXECPATH',
+  'CLAUDE_AGENT_SDK_VERSION',
+  'CLAUDE_CODE_SDK_HAS_OAUTH_REFRESH',
+  'CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST',
+  'CLAUDE_INTERNAL_FC_OVERRIDES',
+  'CLAUDE_CODE_OAUTH_TOKEN',
+] as const;
+for (const key of NESTED_SESSION_ENV_VARS) {
+  if (process.env[key] !== undefined) {
+    delete process.env[key];
+  }
+}
+
 import { loadAgentConfig, resolveAgentDir, resolveAgentClaudeMd } from './agent-config.js';
 import { createBot } from './bot.js';
 import { checkPendingMigrations } from './migrations.js';

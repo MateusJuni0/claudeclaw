@@ -40,3 +40,6 @@ scripts/waste-reminder.sh
 CLAUDE.md
 agents/*/agent.yaml
 agents/*/CLAUDE.md
+
+# Credentials backups (created by watchdog)
+backups/credentials/
