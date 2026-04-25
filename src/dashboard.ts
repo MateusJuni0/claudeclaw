@@ -5,7 +5,7 @@ import { serve } from '@hono/node-server';
 
 import fs from 'fs';
 import path from 'path';
-import { AGENT_ID, ALLOWED_CHAT_ID, DASHBOARD_PORT, DASHBOARD_TOKEN, PROJECT_ROOT, STORE_DIR, WHATSAPP_ENABLED, SLACK_USER_TOKEN, CONTEXT_LIMIT, agentDefaultModel } from './config.js';
+import { AGENT_ID, ALLOWED_CHAT_ID, DASHBOARD_PORT, DASHBOARD_TOKEN, DASHBOARD_URL, PROJECT_ROOT, STORE_DIR, WHATSAPP_ENABLED, SLACK_USER_TOKEN, CONTEXT_LIMIT, agentDefaultModel } from './config.js';
 import crypto from 'crypto';
 import {
   getAllScheduledTasks,
@@ -100,11 +100,24 @@ export function startDashboard(botApi?: Api<RawApi>): void {
 
   const app = new Hono();
 
-  // CORS headers for cross-origin access (Cloudflare tunnel, mobile browsers)
+  // CORS allow-list (cyber-neo audit 2026-04-25): wildcard origin replaced
+  // by an explicit allow-list. localhost variants are always allowed for
+  // local development; DASHBOARD_URL adds the production tunnel (Cloudflare).
+  const allowedOrigins = new Set<string>([
+    `http://localhost:${DASHBOARD_PORT}`,
+    `http://127.0.0.1:${DASHBOARD_PORT}`,
+  ]);
+  if (DASHBOARD_URL) allowedOrigins.add(DASHBOARD_URL);
+
   app.use('*', async (c, next) => {
-    c.header('Access-Control-Allow-Origin', '*');
+    const origin = c.req.header('Origin');
+    if (origin && allowedOrigins.has(origin)) {
+      c.header('Access-Control-Allow-Origin', origin);
+      c.header('Vary', 'Origin');
+    }
     c.header('Access-Control-Allow-Methods', 'GET, POST, DELETE, PATCH, OPTIONS');
-    c.header('Access-Control-Allow-Headers', 'Content-Type');
+    // Allow Authorization for the new Bearer-token path; Content-Type for JSON bodies.
+    c.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
     if (c.req.method === 'OPTIONS') return c.body(null, 204);
     await next();
   });
@@ -115,10 +128,22 @@ export function startDashboard(botApi?: Api<RawApi>): void {
     return c.json({ error: 'Internal server error' }, 500);
   });
 
-  // Token auth middleware
+  // Token auth middleware (cyber-neo audit 2026-04-25):
+  // Preferred: Authorization: Bearer <token> header (not logged in browser
+  // history, server access logs or referrer headers).
+  // Fallback: ?token= query param — kept for backward-compat with the
+  // existing dashboard HTML and direct browser links until clients migrate.
   app.use('*', async (c, next) => {
-    const token = c.req.query('token');
-    if (!DASHBOARD_TOKEN || !token || token !== DASHBOARD_TOKEN) {
+    if (!DASHBOARD_TOKEN) {
+      return c.json({ error: 'Dashboard token not configured' }, 503);
+    }
+    const authHeader = c.req.header('Authorization') ?? '';
+    const headerToken = authHeader.startsWith('Bearer ')
+      ? authHeader.slice(7).trim()
+      : '';
+    const queryToken = c.req.query('token') ?? '';
+    const provided = headerToken || queryToken;
+    if (!provided || provided !== DASHBOARD_TOKEN) {
       return c.json({ error: 'Unauthorized' }, 401);
     }
     await next();
