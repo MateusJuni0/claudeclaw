@@ -121,6 +121,44 @@ export interface AgentResult {
   newSessionId: string | undefined;
   usage: UsageInfo | null;
   aborted?: boolean;
+  /** True if blocked by catastrophic-pattern guard (see CATASTROPHIC_PATTERNS). */
+  blocked?: boolean;
+}
+
+// ── Catastrophic-pattern guard ──────────────────────────────────────────
+// Defence-in-depth layer on top of bypassPermissions + ALLOWED_CHAT_ID.
+// Even if a chat ID is somehow allowed (or compromised), prompts containing
+// these patterns never reach the SDK. Mirrors Madalena's
+// FORBIDDEN_TOOLS_HARDCODED principle: a few catastrophic outcomes deserve
+// a hard regex block that no LLM persuasion can bypass.
+//
+// Refs: cyber-neo audit 2026-04-25 (CRIT-1).
+const CATASTROPHIC_PATTERNS: readonly RegExp[] = Object.freeze([
+  // Filesystem destruction
+  /\brm\s+-[a-z]*r[a-z]*f?\s+(\/|~)(?!\w*\.cache|\/tmp\/)/i,
+  /\brm\s+-rf\s+\$HOME\b/i,
+  // Disk wipe
+  /\bdd\s+if=\/dev\/(zero|random|urandom)\s+of=\/dev\/[sn]d/i,
+  /\bmkfs\.[a-z0-9]+\s+\/dev\/[sn]d/i,
+  // Pipe-to-shell from network
+  /\b(curl|wget|fetch)\b[^|]*\|\s*(sh|bash|zsh|fish)\b/i,
+  // Force-push to protected branches
+  /\bgit\s+push\s+(--force|--force-with-lease|-f)\b[^&|;]*\b(main|master|prod|production)\b/i,
+  // Disk-image overwrites
+  />\s*\/dev\/[sn]d[a-z]/i,
+  // System-wide chmod/chown weakening
+  /\bchmod\s+-R\s+0?777\s+\//i,
+  // Fork bomb classic
+  /:\s*\(\s*\)\s*\{\s*:\|\s*:\s*&\s*\}\s*;\s*:/,
+]);
+
+export function isCatastrophic(message: string): { blocked: boolean; pattern?: string } {
+  for (const pattern of CATASTROPHIC_PATTERNS) {
+    if (pattern.test(message)) {
+      return { blocked: true, pattern: pattern.source };
+    }
+  }
+  return { blocked: false };
 }
 
 /**
@@ -169,6 +207,27 @@ export async function runAgent(
   onStreamText?: (accumulatedText: string) => void,
   mcpAllowlist?: string[],
 ): Promise<AgentResult> {
+  // ── Catastrophic-pattern guard (pre-SDK) ──────────────────────────────
+  // Hard block. Runs before any SDK invocation, before any auth, before
+  // env reads. If the message matches a catastrophic pattern, we never
+  // hand it to Claude. See CATASTROPHIC_PATTERNS for the list.
+  // Refs: cyber-neo audit 2026-04-25 (CRIT-1).
+  const guard = isCatastrophic(message);
+  if (guard.blocked) {
+    logger.warn(
+      { pattern: guard.pattern, messagePreview: message.slice(0, 80) },
+      'Catastrophic pattern blocked pre-SDK',
+    );
+    return {
+      text:
+        'Bloqueado: padrão catastrófico detectado (rm -rf, dd, curl|sh, fork bomb, etc.). ' +
+        'Se realmente precisas de correr este comando, fá-lo no terminal manualmente.',
+      newSessionId: sessionId,
+      usage: null,
+      blocked: true,
+    };
+  }
+
   // Read secrets from .env without polluting process.env.
   // CLAUDE_CODE_OAUTH_TOKEN is optional — the subprocess finds auth via ~/.claude/
   // automatically. Only needed if you want to override which account is used.

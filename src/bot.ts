@@ -298,13 +298,20 @@ async function sendTyping(api: Api<RawApi>, chatId: number): Promise<void> {
 
 /**
  * Authorise the incoming chat against ALLOWED_CHAT_ID.
- * If ALLOWED_CHAT_ID is not yet configured, guide the user to set it up.
- * Returns true if the message should be processed.
+ *
+ * Security model:
+ * - ALLOWED_CHAT_ID configured: only that exact chat is authorised.
+ * - ALLOWED_CHAT_ID empty: deny everything by default. The `/chatid` command
+ *   has its own gate (`if (ALLOWED_CHAT_ID && !isAuthorised(...)) return;`)
+ *   so first-time setup still works — the handler executes regardless of
+ *   isAuthorised when ALLOWED_CHAT_ID is empty.
+ *
+ * Refs: cyber-neo audit 2026-04-25 — fixes "open-by-default" window between
+ * `npm start` and first config (any chat ID had full execution access).
  */
 function isAuthorised(chatId: number): boolean {
   if (!ALLOWED_CHAT_ID) {
-    // Not yet configured — let every request through but warn in the reply handler
-    return true;
+    return false;
   }
   return chatId.toString() === ALLOWED_CHAT_ID;
 }
